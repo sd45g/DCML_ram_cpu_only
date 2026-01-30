@@ -1,9 +1,10 @@
 """
 DCML Project - Runtime Anomaly Detector
-Socket Drain Attack Detection System
+System Attack Detection (CPU Stress / Memory Leak)
 
-This script monitors your system in real-time and detects Socket Drain attacks
+This script monitors your system in real-time and detects attacks
 using the pre-trained machine learning model.
+Features monitored: CPU and RAM only
 """
 
 import psutil
@@ -18,12 +19,11 @@ warnings.filterwarnings('ignore')
 # Configuration
 MODEL_FILE = "anomaly_detector.pkl"
 SCALER_FILE = "scaler.pkl"
-FEATURES = ["cpu", "ram", "sockets", "net_speed", "threads"]
+FEATURES = ["cpu", "ram"]  # Only CPU and RAM
 CHECK_INTERVAL = 1  # seconds between checks
 ALERT_THRESHOLD = 3  # consecutive anomalies before alerting
 
 # Global state
-last_bytes_sent = psutil.net_io_counters().bytes_sent
 consecutive_anomalies = 0
 
 def load_model():
@@ -35,38 +35,18 @@ def load_model():
     return model, scaler
 
 def get_system_status():
-    """Collect current system metrics"""
-    global last_bytes_sent
-    
-    # Network speed (delta)
-    current_bytes_sent = psutil.net_io_counters().bytes_sent
-    net_speed = current_bytes_sent - last_bytes_sent
-    last_bytes_sent = current_bytes_sent
-    
-    # Thread count
-    total_threads = sum(
-        p.info['num_threads'] 
-        for p in psutil.process_iter(['num_threads']) 
-        if p.info['num_threads']
-    )
-    
+    """Collect current system metrics (CPU and RAM only)"""
     return {
         "cpu": psutil.cpu_percent(interval=None),
-        "ram": psutil.virtual_memory().percent,
-        "sockets": len(psutil.net_connections()),
-        "net_speed": net_speed,
-        "threads": total_threads
+        "ram": psutil.virtual_memory().percent
     }
 
 def predict_anomaly(model, scaler, status):
     """Use the model to predict if current state is anomaly"""
-    # Create DataFrame with proper feature names
+    # Create DataFrame with only CPU and RAM
     features_df = pd.DataFrame([[
         status["cpu"],
-        status["ram"],
-        status["sockets"],
-        status["net_speed"],
-        status["threads"]
+        status["ram"]
     ]], columns=FEATURES)
     
     # Scale features
@@ -90,15 +70,13 @@ def format_status(status, prediction, confidence):
     
     status_str = (
         f"CPU: {status['cpu']:5.1f}% | "
-        f"RAM: {status['ram']:5.1f}% | "
-        f"Sockets: {status['sockets']:5d} | "
-        f"Threads: {status['threads']:5d}"
+        f"RAM: {status['ram']:5.1f}%"
     )
     
     if prediction == 0:
-        result = f"[{timestamp}] {status_str} | Status: ✓ NORMAL"
+        result = f"[{timestamp}] {status_str} | Status: NORMAL"
     else:
-        result = f"[{timestamp}] {status_str} | Status: ⚠ ANOMALY ({confidence:.0f}%)"
+        result = f"[{timestamp}] {status_str} | Status: ANOMALY ({confidence:.0f}%)"
     
     return result
 
@@ -106,9 +84,9 @@ def run_detector():
     """Main detection loop"""
     global consecutive_anomalies
     
-    print("\n" + "=" * 70)
-    print("   DCML Socket Drain Anomaly Detector - Runtime Monitor")
-    print("=" * 70)
+    print("\n" + "=" * 60)
+    print("   DCML Anomaly Detector - Real-Time Monitor")
+    print("=" * 60)
     print()
     
     # Load model
@@ -118,7 +96,7 @@ def run_detector():
     print("Starting real-time monitoring...")
     print("Press Ctrl+C to stop.")
     print()
-    print("-" * 70)
+    print("-" * 60)
     
     try:
         while True:
@@ -140,19 +118,18 @@ def run_detector():
             # Alert if sustained anomaly
             if consecutive_anomalies >= ALERT_THRESHOLD:
                 print()
-                print("!" * 70)
-                print("!!! ALERT: Socket Drain Attack Detected !!!")
-                print(f"!!! Sustained anomaly for {consecutive_anomalies} seconds")
-                print(f"!!! Sockets: {status['sockets']} (normal: ~2000)")
-                print("!" * 70)
+                print("!" * 60)
+                print("!!! ALERT: Attack Detected !!!")
+                print(f"!!! Anomaly detected for {consecutive_anomalies} seconds")
+                print("!" * 60)
                 print()
             
             time.sleep(CHECK_INTERVAL)
     except KeyboardInterrupt: 
         print()
-        print("-" * 70)
+        print("-" * 60)
         print("Monitoring stopped.")
-        print("=" * 70)
+        print("=" * 60)
 
 if __name__ == "__main__":
     run_detector()

@@ -1,8 +1,9 @@
 """
 DCML Project - Model Training Script
-Socket Drain Attack Anomaly Detector
+System Attack Anomaly Detector
 
-This script trains and compares multiple ML algorithms for detecting Socket Drain attacks.
+This script trains and compares multiple ML algorithms for detecting 
+CPU stress and memory leak attacks using only CPU and RAM metrics.
 """
 
 import pandas as pd
@@ -23,10 +24,11 @@ warnings.filterwarnings('ignore')
 DATA_FILE = "my_system_data.csv"
 MODEL_FILE = "anomaly_detector.pkl"
 SCALER_FILE = "scaler.pkl"
-FEATURES = ["cpu", "ram", "sockets", "net_speed", "threads"]
+FEATURES = ["cpu", "ram"]  # Only CPU and RAM - no sockets!
 TARGET = "label"
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
+
 
 def load_and_prepare_data():
     """Load CSV and prepare features/target"""
