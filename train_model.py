@@ -1,176 +1,126 @@
-"""
-DCML Project - Model Training Script
-System Attack Anomaly Detector
-
-This script trains and compares multiple ML algorithms for detecting 
-CPU stress and memory leak attacks using only CPU and RAM metrics.
-"""
-
 import pandas as pd
 import numpy as np
+import joblib
+import time
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import classification_report, accuracy_score, f1_score, confusion_matrix, precision_score, recall_score
+
+# 6 Different Models
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
-import joblib
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.tree import DecisionTreeClassifier
 
 # Configuration
 DATA_FILE = "my_system_data.csv"
 MODEL_FILE = "anomaly_detector.pkl"
 SCALER_FILE = "scaler.pkl"
-FEATURES = ["cpu", "ram"]  # Only CPU and RAM - no sockets!
-TARGET = "label"
-TEST_SIZE = 0.2
-RANDOM_STATE = 42
+REPORT_FILE = "evaluation_report.txt"
 
+def train_and_compare():
+    print("\n" + "="*60)
+    print("TRAINING & MODEL SELECTION")
+    print("="*60)
+    
+    # 1. Load Data
+    try:
+        df = pd.read_csv(DATA_FILE)
+        print(f"Loaded {len(df)} samples from {DATA_FILE}")
+    except FileNotFoundError:
+        print(f"[!] Error: {DATA_FILE} not found. Run collect_data.py first!")
+        return
 
-def load_and_prepare_data():
-    """Load CSV and prepare features/target"""
-    print("=" * 60)
-    print("STEP 1: Loading Data")
-    print("=" * 60)
+    # 2. Prepare Features
+    X = df.drop(columns=['label'])
+    y = df['label']
     
-    df = pd.read_csv(DATA_FILE)
-    print(f"Loaded {len(df)} samples")
-    print(f"Features: {FEATURES}")
-    print(f"Class distribution:")
-    print(f"  - Normal (0): {len(df[df[TARGET] == 0])}")
-    print(f"  - Anomaly (1): {len(df[df[TARGET] == 1])}")
+    # 3. Split Data (80% Train, 20% Test)
+    # Stratify ensures we have attacks in both sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     
-    X = df[FEATURES]
-    y = df[TARGET]
-    
-    return X, y
-
-def train_and_evaluate_models(X_train, X_test, y_train, y_test):
-    """Train multiple models and compare performance"""
-    print("\n" + "=" * 60)
-    print("STEP 2: Training & Evaluating Models")
-    print("=" * 60)
-    
-    # Define models to compare
-    models = {
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE),
-        "Decision Tree": DecisionTreeClassifier(random_state=RANDOM_STATE),
-        "Gradient Boosting": GradientBoostingClassifier(random_state=RANDOM_STATE),
-        "SVM (RBF)": SVC(kernel='rbf', random_state=RANDOM_STATE),
-        "K-Nearest Neighbors": KNeighborsClassifier(n_neighbors=5),
-        "Logistic Regression": LogisticRegression(random_state=RANDOM_STATE, max_iter=1000)
-    }
-    
-    results = []
-    
-    for name, model in models.items():
-        print(f"\nTraining {name}...")
-        
-        # Train
-        model.fit(X_train, y_train)
-        
-        # Predict
-        y_pred = model.predict(X_test)
-        
-        # Calculate metrics
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
-        
-        # Cross-validation
-        cv_scores = cross_val_score(model, X_train, y_train, cv=5)
-        
-        results.append({
-            "Model": name,
-            "Accuracy": accuracy,
-            "Precision": precision,
-            "Recall": recall,
-            "F1-Score": f1,
-            "CV Mean": cv_scores.mean(),
-            "CV Std": cv_scores.std(),
-            "model_obj": model
-        })
-        
-        print(f"  Accuracy: {accuracy:.4f} | F1: {f1:.4f} | CV: {cv_scores.mean():.4f} (+/- {cv_scores.std():.4f})")
-    
-    return results
-
-def select_best_model(results):
-    """Select the best model based on F1-Score"""
-    print("\n" + "=" * 60)
-    print("STEP 3: Model Comparison & Selection")
-    print("=" * 60)
-    
-    # Sort by F1-Score
-    results_sorted = sorted(results, key=lambda x: x["F1-Score"], reverse=True)
-    
-    print("\n{:<25} {:>10} {:>10} {:>10} {:>10}".format(
-        "Model", "Accuracy", "Precision", "Recall", "F1-Score"
-    ))
-    print("-" * 65)
-    
-    for r in results_sorted:
-        print("{:<25} {:>10.4f} {:>10.4f} {:>10.4f} {:>10.4f}".format(
-            r["Model"], r["Accuracy"], r["Precision"], r["Recall"], r["F1-Score"]
-        ))
-    
-    best = results_sorted[0]
-    print(f"\n*** BEST MODEL: {best['Model']} ***")
-    print(f"    F1-Score: {best['F1-Score']:.4f}")
-    print(f"    Accuracy: {best['Accuracy']:.4f}")
-    
-    return best
-
-def save_model(model, scaler):
-    """Save the best model and scaler to files"""
-    print("\n" + "=" * 60)
-    print("STEP 4: Saving Model")
-    print("=" * 60)
-    
-    joblib.dump(model, MODEL_FILE)
-    joblib.dump(scaler, SCALER_FILE)
-    
-    print(f"Model saved to: {MODEL_FILE}")
-    print(f"Scaler saved to: {SCALER_FILE}")
-
-def main():
-    print("\n" + "#" * 60)
-    print("#  DCML Socket Drain Anomaly Detector - Model Training")
-    print("#" * 60)
-    
-    # Load data
-    X, y = load_and_prepare_data()
-    
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
-    )
-    print(f"\nTrain set: {len(X_train)} samples")
-    print(f"Test set: {len(X_test)} samples")
-    
-    # Scale features
+    # 4. Scale Data
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # Train and evaluate models
-    results = train_and_evaluate_models(X_train_scaled, X_test_scaled, y_train, y_test)
+    # 5. Define Models
+    models = {
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+        "Gradient Boosting": GradientBoostingClassifier(random_state=42),
+        "SVM": SVC(probability=True, random_state=42),
+        "KNN": KNeighborsClassifier(n_neighbors=5),
+        "Decision Tree": DecisionTreeClassifier(random_state=42),
+        "Logistic Regression": LogisticRegression(random_state=42)
+    }
     
-    # Select best model
-    best = select_best_model(results)
+    results = []
     
-    # Save best model
-    save_model(best["model_obj"], scaler)
+    print(f"\nTraining {len(models)} models...\n")
+    print(f"{'MODEL':<20} | {'ACCURACY':<10} | {'PRECISION':<10} | {'RECALL':<10} | {'F1-SCORE':<10}")
+    print("-" * 70)
     
-    print("\n" + "#" * 60)
-    print("#  Training Complete!")
-    print("#" * 60)
-    print(f"\nYour anomaly detector is ready: {MODEL_FILE}")
-    print("Use this model in your runtime detector to detect Socket Drain attacks.\n")
+    best_model_name = ""
+    best_model_obj = None
+    best_f1 = -1
+    best_report = ""
+    
+    report_content = "DCML PROJECT - MODEL EVALUATION REPORT\n"
+    report_content += "="*50 + "\n\n"
+    
+    # 6. Train & Evaluate Loop
+    for name, model in models.items():
+        # Train
+        model.fit(X_train_scaled, y_train)
+        
+        # Predict
+        y_pred = model.predict(X_test_scaled)
+        
+        # Evaluate
+        acc = accuracy_score(y_test, y_pred)
+        prec = precision_score(y_test, y_pred)
+        rec = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        
+        # Detailed metrics
+        report_content += f"Model: {name}\n"
+        report_content += f"Accuracy:  {acc:.4f}\n"
+        report_content += f"Precision: {prec:.4f}\n"
+        report_content += f"Recall:    {rec:.4f}\n"
+        report_content += f"F1-Score:  {f1:.4f}\n"
+        report_content += "-"*20 + "\n"
+        
+        print(f"{name:<20} | {acc:.4f}     | {prec:.4f}     | {rec:.4f}     | {f1:.4f}")
+        
+        if f1 > best_f1:
+            best_f1 = f1
+            best_model_name = name
+            best_model_obj = model
+            # Save the full classification report for the winner
+            best_report = classification_report(y_test, y_pred)
+            
+    print("-" * 70)
+    print(f"\nWINNER: {best_model_name} (F1: {best_f1:.4f})")
+    
+    # 7. Add Winner details to report
+    report_content += "\n" + "="*50 + "\n"
+    report_content += f"WINNER SELECTION: {best_model_name}\n"
+    report_content += "="*50 + "\n"
+    report_content += "Detailed Classification Report:\n\n"
+    report_content += best_report
+    
+    # Save Report
+    with open(REPORT_FILE, "w") as f:
+        f.write(report_content)
+    print(f"Full evaluation report saved to: {REPORT_FILE}")
+    
+    # 8. Save the Winner
+    print(f"Saving {best_model_name} to {MODEL_FILE}...")
+    joblib.dump(best_model_obj, MODEL_FILE)
+    joblib.dump(scaler, SCALER_FILE)
+    
+    print("\nTraining Complete. Ready for Detection!")
 
 if __name__ == "__main__":
-    main()
+    train_and_compare()

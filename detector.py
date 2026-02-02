@@ -1,135 +1,87 @@
-"""
-DCML Project - Runtime Anomaly Detector
-System Attack Detection (CPU Stress / Memory Leak)
-
-This script monitors your system in real-time and detects attacks
-using the pre-trained machine learning model.
-Features monitored: CPU and RAM only
-"""
-
-import psutil
-import time
 import joblib
+import time
+import os
+import sys
 import numpy as np
 import pandas as pd
-from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
+from monitor import SystemMonitor
 
 # Configuration
 MODEL_FILE = "anomaly_detector.pkl"
 SCALER_FILE = "scaler.pkl"
-FEATURES = ["cpu", "ram"]  # Only CPU and RAM
-CHECK_INTERVAL = 1  # seconds between checks
-ALERT_THRESHOLD = 3  # consecutive anomalies before alerting
 
-# Global state
-consecutive_anomalies = 0
-
-def load_model():
-    """Load the trained model and scaler"""
-    print("Loading anomaly detection model...")
+def main():
+    print("\n" + "="*60)
+    print("LIVE ANOMALY DETECTOR")
+    print("="*60)
+    
+    # 1. Load Brain
+    if not os.path.exists(MODEL_FILE):
+        print(f"[!] Error: {MODEL_FILE} not found. Run train_model.py first!")
+        return
+        
+    print("Loading model...", end="")
     model = joblib.load(MODEL_FILE)
     scaler = joblib.load(SCALER_FILE)
-    print("Model loaded successfully!")
-    return model, scaler
-
-def get_system_status():
-    """Collect current system metrics (CPU and RAM only)"""
-    return {
-        "cpu": psutil.cpu_percent(interval=None),
-        "ram": psutil.virtual_memory().percent
-    }
-
-def predict_anomaly(model, scaler, status):
-    """Use the model to predict if current state is anomaly"""
-    # Create DataFrame with only CPU and RAM
-    features_df = pd.DataFrame([[
-        status["cpu"],
-        status["ram"]
-    ]], columns=FEATURES)
+    print(" Done!")
+    print(f"Algorithm: {type(model).__name__}")
     
-    # Scale features
-    features_scaled = scaler.transform(features_df)
-    
-    # Predict
-    prediction = model.predict(features_scaled)[0]
-    
-    # Get probability if available
-    if hasattr(model, 'predict_proba'):
-        proba = model.predict_proba(features_scaled)[0]
-        confidence = max(proba) * 100
-    else:
-        confidence = 100.0
-    
-    return prediction, confidence
-
-def format_status(status, prediction, confidence):
-    """Format status for display"""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    
-    status_str = (
-        f"CPU: {status['cpu']:5.1f}% | "
-        f"RAM: {status['ram']:5.1f}%"
-    )
-    
-    if prediction == 0:
-        result = f"[{timestamp}] {status_str} | Status: NORMAL"
-    else:
-        result = f"[{timestamp}] {status_str} | Status: ANOMALY ({confidence:.0f}%)"
-    
-    return result
-
-def run_detector():
-    """Main detection loop"""
-    global consecutive_anomalies
-    
-    print("\n" + "=" * 60)
-    print("   DCML Anomaly Detector - Real-Time Monitor")
-    print("=" * 60)
-    print()
-    
-    # Load model
-    model, scaler = load_model()
-    
-    print()
-    print("Starting real-time monitoring...")
-    print("Press Ctrl+C to stop.")
-    print()
+    # 2. Init Monitor
+    monitor = SystemMonitor()
+    print("\nStarting Guard... (Press Ctrl+C to stop)")
     print("-" * 60)
     
+    # 3. Detection Loop
     try:
+        # Initial wait for rate calculation
+        time.sleep(1)
+        
         while True:
-            # Get current status
-            status = get_system_status()
+            # Get Data
+            metrics = monitor.get_metrics()
+            
+            # Prepare for Model (must match training order)
+            feature_names = ['cpu', 'ram', 'processes', 'disk_read', 'disk_write', 'net_sent']
+            features_df = pd.DataFrame([[
+                metrics['cpu'],
+                metrics['ram'],
+                metrics['processes'],
+                metrics['disk_read'],
+                metrics['disk_write'],
+                metrics['net_sent']
+            ]], columns=feature_names)
+            
+            # Scale
+            features_scaled = scaler.transform(features_df)
             
             # Predict
-            prediction, confidence = predict_anomaly(model, scaler, status)
+            prediction = model.predict(features_scaled)[0]
             
-            # Track consecutive anomalies
+            # Try to get probability if supported
+            try:
+                probs = model.predict_proba(features_scaled)[0]
+                confidence = probs[prediction] * 100
+            except:
+                confidence = 100.0
+            
+            # Display
+            # Clear line/overwrite? We'll just print new lines for log history
+            timestamp = time.strftime("%H:%M:%S")
+            
             if prediction == 1:
-                consecutive_anomalies += 1
+                status = "⚠️  ATTACK DETECTED!"
+                color = "\033[91m" # Red (if terminal supports it)
             else:
-                consecutive_anomalies = 0
+                status = "✅ Normal"
+                color = "\033[92m" # Green
+                
+            print(f"[{timestamp}] {status:<20} | Conf: {confidence:.0f}% | "
+                  f"CPU: {metrics['cpu']:.0f}% RAM: {metrics['ram']:.0f}%")
             
-            # Display status
-            print(format_status(status, prediction, confidence))
+            time.sleep(0.5)
             
-            # Alert if sustained anomaly
-            if consecutive_anomalies >= ALERT_THRESHOLD:
-                print()
-                print("!" * 60)
-                print("!!! ALERT: Attack Detected !!!")
-                print(f"!!! Anomaly detected for {consecutive_anomalies} seconds")
-                print("!" * 60)
-                print()
-            
-            time.sleep(CHECK_INTERVAL)
-    except KeyboardInterrupt: 
-        print()
-        print("-" * 60)
-        print("Monitoring stopped.")
-        print("=" * 60)
+    except KeyboardInterrupt:
+        print("\nDetector Stopped.")
 
 if __name__ == "__main__":
-    run_detector()
+    main()

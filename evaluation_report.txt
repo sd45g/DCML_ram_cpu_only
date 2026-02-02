@@ -1,0 +1,53 @@
+DCML PROJECT - MODEL EVALUATION REPORT
+==================================================
+
+Model: Random Forest
+Accuracy:  0.9958
+Precision: 0.9917
+Recall:    1.0000
+F1-Score:  0.9959
+--------------------
+Model: Gradient Boosting
+Accuracy:  0.9958
+Precision: 0.9917
+Recall:    1.0000
+F1-Score:  0.9959
+--------------------
+Model: SVM
+Accuracy:  0.9708
+Precision: 0.9520
+Recall:    0.9917
+F1-Score:  0.9714
+--------------------
+Model: KNN
+Accuracy:  0.9833
+Precision: 0.9754
+Recall:    0.9917
+F1-Score:  0.9835
+--------------------
+Model: Decision Tree
+Accuracy:  0.9958
+Precision: 0.9917
+Recall:    1.0000
+F1-Score:  0.9959
+--------------------
+Model: Logistic Regression
+Accuracy:  0.9792
+Precision: 0.9600
+Recall:    1.0000
+F1-Score:  0.9796
+--------------------
+
+==================================================
+WINNER SELECTION: Random Forest
+==================================================
+Detailed Classification Report:
+
+              precision    recall  f1-score   support
+
+           0       1.00      0.99      1.00       120
+           1       0.99      1.00      1.00       120
+
+    accuracy                           1.00       240
+   macro avg       1.00      1.00      1.00       240
+weighted avg       1.00      1.00      1.00       240
